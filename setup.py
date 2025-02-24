@@ -9,8 +9,8 @@ setup(
     install_requires=[
         "pytest",
         "pandas",
-        "scikit-learn == 1.3.1",
-        "numpy == 1.26.4",
+        "scikit-learn",
+        "numpy == 2.1.0",
         "ipykernel",
         "xlrd",
     ],

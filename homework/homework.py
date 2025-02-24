@@ -97,18 +97,17 @@
 # {'type': 'cm_matrix', 'dataset': 'test', 'true_0': {"predicted_0": 15562, "predicte_1": 650}, 'true_1': {"predicted_0": 2490, "predicted_1": 1420}}
 #
 
-
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import os
+from glob import glob
+from sklearn.neural_network import MLPClassifier
 import pandas as pd
 import gzip
 import pickle
 import json
 from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.feature_selection import SelectKBest, f_classif
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -118,29 +117,27 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from sklearn.model_selection import GridSearchCV
-import os
-import glob
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
 
 
 def load_data():
 
-    dataframe_test = pd.read_csv(
+    test_data_csv = pd.read_csv(
         "./files/input/test_data.csv.zip",
         index_col=False,
         compression="zip",
     )
 
-    dataframe_train = pd.read_csv(
+    train_data_csv = pd.read_csv(
         "./files/input/train_data.csv.zip",
         index_col=False,
         compression="zip",
     )
 
-    return dataframe_train, dataframe_test
+    return train_data_csv, test_data_csv
 
 
-# Paso 1.
-# Limpiar los datos
 def clean_data(df):
     df_copy = df.copy()
     df_copy = df_copy.rename(columns={"default payment next month": "default"})
@@ -152,23 +149,17 @@ def clean_data(df):
     return df_copy
 
 
-# Paso 2.
-# Divida los datasets en x_train, y_train, x_test, y_test.
 def split_data(df):
-    # X , Y
     return df.drop(columns=["default"]), df["default"]
 
 
-# Paso 3.
-# Crear un pipeline para el modelo de clasificación
 def make_pipeline(x_train):
     categorical_features = ["SEX", "EDUCATION", "MARRIAGE"]
     numerical_features = [
         col for col in x_train.columns if col not in categorical_features
     ]
 
-    # Preprocesador
-    preprocessor = ColumnTransformer(
+    pre_procesamiento = ColumnTransformer(
         transformers=[
             ("cat", OneHotEncoder(), categorical_features),
             ("scaler", StandardScaler(), numerical_features),
@@ -177,7 +168,7 @@ def make_pipeline(x_train):
 
     pipeline = Pipeline(
         [
-            ("preprocessor", preprocessor),
+            ("pre_procesamiento", pre_procesamiento),
             ("feature_selection", SelectKBest(score_func=f_classif)),
             ("pca", PCA()),
             ("classifier", MLPClassifier(max_iter=15000, random_state=21)),
@@ -187,10 +178,7 @@ def make_pipeline(x_train):
     return pipeline
 
 
-# Paso 4.
-# Optimizar los hiperparametros del pipeline usando validación cruzada.
 def create_estimator(pipeline):
-    # Definición de la malla de parámetros para la búsqueda
     param_grid = {
         "pca__n_components": [None],
         "feature_selection__k": [20],
@@ -198,43 +186,32 @@ def create_estimator(pipeline):
         "classifier__alpha": [0.26],
         "classifier__learning_rate_init": [0.001],
     }
-
-    # Configuración de GridSearchCV para la validación cruzada
     grid_search = GridSearchCV(
-        estimator=pipeline,  # Pipeline que incluye el preprocesamiento y el clasificador
-        param_grid=param_grid,  # Hiperparámetros a optimizar
-        cv=10,  # 10 divisiones para la validación cruzada
+        estimator=pipeline,
+        param_grid=param_grid,
+        cv=10,
         scoring="balanced_accuracy",
         n_jobs=-1,
+        verbose=3,
         refit=True,
     )
-
     return grid_search
 
 
-# Paso 5.
-# Guarde el modelo (comprimido con gzip) como "files/models/model.pkl.gz".
 def _create_output_directory(output_directory):
     if os.path.exists(output_directory):
-        for file in glob.glob(f"{output_directory}/*"):
+        for file in glob(f"{output_directory}/*"):
             os.remove(file)
         os.rmdir(output_directory)
     os.makedirs(output_directory)
 
 
 def _save_model(path, estimator):
-    _create_output_directory(
-        "files/models/"
-    )  # Verifica que el directorio se gestione correctamente.
-
-    with gzip.open(
-        path, "wb"
-    ) as f:  # Abre el archivo comprimido en modo escritura binaria.
-        pickle.dump(estimator, f)  # Guarda el modelo serializado.
+    _create_output_directory("files/models/")
+    with gzip.open(path, "wb") as f:
+        pickle.dump(estimator, f)
 
 
-# Paso 6.
-# Calcule las metricas de precision, precision balanceada, recall...
 def calculate_metrics(dataset_type, y_true, y_pred):
     """Calculate metrics"""
     return {
@@ -247,8 +224,6 @@ def calculate_metrics(dataset_type, y_true, y_pred):
     }
 
 
-# Paso 7.
-# Calcule las matrices de confusion para los conjuntos de entrenamiento y prueba
 def calculate_confusion(dataset_type, y_true, y_pred):
     """Confusion matrix"""
     cm = confusion_matrix(y_true, y_pred)
@@ -260,7 +235,7 @@ def calculate_confusion(dataset_type, y_true, y_pred):
     }
 
 
-def laboratorio_12():
+def modelo_lab12():
     data_train, data_test = load_data()
     data_train = clean_data(data_train)
     data_test = clean_data(data_test)
@@ -293,5 +268,9 @@ def laboratorio_12():
         file.write(json.dumps(test_confusion_metrics) + "\n")
 
 
+def _run_jobs():
+    modelo_lab12()
+
+
 if __name__ == "__main__":
-    laboratorio_12()
+    _run_jobs()
